@@ -88,13 +88,18 @@ const planeTexture = textureLoader.load("textures/plane-diffuse2k.jpg");
 // Shifter Texture
 // ktx2Loader.load("textures/anisotropy--invert.ktx2", (texture) => {
 //   textures.anisotropy = texture;
+textures.anisotropy = textureLoader.load("textures/shifter-clean-anisotropy.png")
+textures.anisotropy.flipY = false;
+console.log(textures.anisotropy)
 
 // Shifter
 gltfLoader.load("models/h1sq-shiny.glb", (gltf) => {
   const shifter = gltf.scene;
+  let anisotropyStrength = 0;
 
   shifter.traverse((child) => {
     if (child.isMesh) {
+      console.log(child.name)
       if (
         child.name === "anisotropyEnds" ||
         child.name === "anisotropyClamps" ||
@@ -102,6 +107,15 @@ gltfLoader.load("models/h1sq-shiny.glb", (gltf) => {
       ) {
         // Create new physical material while preserving existing properties
         const oldMaterial = child.material;
+        if (child.name === "anisotropyEnds") {
+          anisotropyStrength = .12
+        } else if (child.name === "anisotropyClamps") {
+          anisotropyStrength = .12
+        } else {
+          anisotropyStrength = .08
+        }
+        console.log(anisotropyStrength)
+
         const physicalMaterial = new THREE.MeshPhysicalMaterial({
           // Copy existing material properties
           map: oldMaterial.map,
@@ -114,7 +128,8 @@ gltfLoader.load("models/h1sq-shiny.glb", (gltf) => {
           // Add anisotropy properties
           anisotropyMap: textures.anisotropy,
           anisotropyRotation: 1.94,
-          anisotropy: child.name === "anisotropyEnds" ? 0.12 : 0.1,
+          anisotropy: anisotropyStrength,
+          // anisotropy: child.name === "anisotropyEnds" ? 0.12 : 0.1,
         });
 
         // Dispose of old material to free memory
@@ -146,7 +161,7 @@ gltfLoader.load("models/h1sq-shiny.glb", (gltf) => {
     .name("Anisotropy Clamps Intensity");
 
   materialTweaks
-    .add(meshReferences.anisotropyScrews.material, "anisotropy")
+    .add(meshReferences.anisotropyScrew.material, "anisotropy")
     .min(0)
     .max(1)
     .step(0.01)
