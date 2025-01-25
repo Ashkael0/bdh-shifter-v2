@@ -2,7 +2,7 @@ import * as THREE from "three";
 import GUI from "lil-gui";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader";
+// import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { GainMapLoader } from "@monogrid/gainmap-js";
@@ -63,15 +63,15 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
 //loaders
 const gainMapLoader = new GainMapLoader(renderer);
-const ktx2Loader = new KTX2Loader();
+// const ktx2Loader = new KTX2Loader();
 const textureLoader = new THREE.TextureLoader();
-ktx2Loader.setTranscoderPath("/textures/");
-ktx2Loader.detectSupport(renderer);
+// ktx2Loader.setTranscoderPath("/textures/");
+// ktx2Loader.detectSupport(renderer);
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath("/draco/");
 const gltfLoader = new GLTFLoader();
 gltfLoader.setDRACOLoader(dracoLoader);
-gltfLoader.setKTX2Loader(ktx2Loader);
+// gltfLoader.setKTX2Loader(ktx2Loader);
 
 const textures = {};
 const meshReferences = {
@@ -82,92 +82,99 @@ const meshReferences = {
 };
 
 // Plane bakeds hadow texture
-const planeTexture = textureLoader.load("textures/plane-diffuse2k--v2.jpg");
+const planeTexture = textureLoader.load("textures/plane-diffuse2k.jpg");
 // planeTexture.colorSpace = THREE.SRGBColorSpace;
 
 // Shifter Texture
-ktx2Loader.load("textures/anisotropy--invert.ktx2", (texture) => {
-  textures.anisotropy = texture;
+// ktx2Loader.load("textures/anisotropy--invert.ktx2", (texture) => {
+//   textures.anisotropy = texture;
 
-  // Shifter
-  gltfLoader.load("models/shifter-ktx2-split.glb", (gltf) => {
-    const shifter = gltf.scene;
+// Shifter
+gltfLoader.load("models/h1sq-shiny.glb", (gltf) => {
+  const shifter = gltf.scene;
 
-    shifter.traverse((child) => {
-      if (child.isMesh) {
-        if (
-          child.name === "anisotropyEnds" ||
-          child.name === "anisotropyClamps"
-        ) {
-          // Create new physical material while preserving existing properties
-          const oldMaterial = child.material;
-          const physicalMaterial = new THREE.MeshPhysicalMaterial({
-            // Copy existing material properties
-            map: oldMaterial.map,
-            normalMap: oldMaterial.normalMap,
-            roughnessMap: oldMaterial.roughnessMap,
-            metalnessMap: oldMaterial.metalnessMap,
-            color: oldMaterial.color,
-            metalness: oldMaterial.metalness,
-            roughness: oldMaterial.roughness,
-            // Add anisotropy properties
-            anisotropyMap: textures.anisotropy,
-            anisotropyRotation: 1.94,
-            anisotropy: child.name === "anisotropyEnds" ? 0.12 : 0.1,
-          });
+  shifter.traverse((child) => {
+    if (child.isMesh) {
+      if (
+        child.name === "anisotropyEnds" ||
+        child.name === "anisotropyClamps" ||
+        child.name === "anisotropyScrew"
+      ) {
+        // Create new physical material while preserving existing properties
+        const oldMaterial = child.material;
+        const physicalMaterial = new THREE.MeshPhysicalMaterial({
+          // Copy existing material properties
+          map: oldMaterial.map,
+          normalMap: oldMaterial.normalMap,
+          roughnessMap: oldMaterial.roughnessMap,
+          metalnessMap: oldMaterial.metalnessMap,
+          color: oldMaterial.color,
+          metalness: oldMaterial.metalness,
+          roughness: oldMaterial.roughness,
+          // Add anisotropy properties
+          anisotropyMap: textures.anisotropy,
+          anisotropyRotation: 1.94,
+          anisotropy: child.name === "anisotropyEnds" ? 0.12 : 0.1,
+        });
 
-          // Dispose of old material to free memory
-          oldMaterial.dispose();
-          child.material = physicalMaterial;
+        // Dispose of old material to free memory
+        oldMaterial.dispose();
+        child.material = physicalMaterial;
 
-          // Store reference
-          meshReferences[child.name] = child;
-        } else {
-          meshReferences[child.name] = child;
-        }
+        // Store reference
+        meshReferences[child.name] = child;
+      } else {
+        meshReferences[child.name] = child;
       }
-    });
-    shifter.position.set(0, 0, 0);
-    scene.add(shifter);
-
-    materialTweaks
-      .add(meshReferences.anisotropyEnds.material, "anisotropy")
-      .min(0)
-      .max(1)
-      .step(0.01)
-      .name("Anisotropy Ends Intensity");
-
-    materialTweaks
-      .add(meshReferences.anisotropyClamps.material, "anisotropy")
-      .min(0)
-      .max(1)
-      .step(0.01)
-      .name("Anisotropy Clamps Intensity");
-
-    materialTweaks
-      .add(meshReferences.anisotropyEnds.material, "anisotropyRotation")
-      .min(0)
-      .max(Math.PI * 2)
-      .step(0.01)
-      .onChange((value) => {
-        meshReferences.anisotropyClamps.material.anisotropyRotation = value;
-      })
-      .name("Anisotropy Rotation");
-
-    const updateRoughness = (value) => {
-      meshReferences.anisotropyEnds.material.roughness = value;
-      meshReferences.anisotropyClamps.material.roughness = value;
-      meshReferences.base.material.roughness = value;
-    };
-
-    materialTweaks
-      .add({ roughness: 0.5 }, "roughness")
-      .min(0)
-      .max(1)
-      .step(0.01)
-      .name("Polished Parts Roughness")
-      .onChange(updateRoughness);
+    }
   });
+  shifter.position.set(0, 0, 0);
+  scene.add(shifter);
+
+  materialTweaks
+    .add(meshReferences.anisotropyEnds.material, "anisotropy")
+    .min(0)
+    .max(1)
+    .step(0.01)
+    .name("Anisotropy Ends Intensity");
+
+  materialTweaks
+    .add(meshReferences.anisotropyClamps.material, "anisotropy")
+    .min(0)
+    .max(1)
+    .step(0.01)
+    .name("Anisotropy Clamps Intensity");
+
+  materialTweaks
+    .add(meshReferences.anisotropyScrews.material, "anisotropy")
+    .min(0)
+    .max(1)
+    .step(0.01)
+    .name("Anisotropy Screw Intensity");
+
+  materialTweaks
+    .add(meshReferences.anisotropyEnds.material, "anisotropyRotation")
+    .min(0)
+    .max(Math.PI * 2)
+    .step(0.01)
+    .onChange((value) => {
+      meshReferences.anisotropyClamps.material.anisotropyRotation = value;
+    })
+    .name("Anisotropy Rotation");
+
+  const updateRoughness = (value) => {
+    meshReferences.anisotropyEnds.material.roughness = value;
+    meshReferences.anisotropyClamps.material.roughness = value;
+    meshReferences.base.material.roughness = value;
+  };
+
+  materialTweaks
+    .add({ roughness: 0.5 }, "roughness")
+    .min(0)
+    .max(1)
+    .step(0.01)
+    .name("Polished Parts Roughness")
+    .onChange(updateRoughness);
 });
 
 // Floor
