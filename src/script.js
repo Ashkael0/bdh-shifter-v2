@@ -93,94 +93,144 @@ textures.anisotropy.flipY = false;
 console.log(textures.anisotropy)
 
 // Shifter
-gltfLoader.load("models/h1sq-shiny.glb", (gltf) => {
+
+// gltfLoader.load("models/h1sq-shiny.glb", (gltf) => {
+gltfLoader.load("models/h1sq-shiny-clearcoat.glb", (gltf) => {
   const shifter = gltf.scene;
-  let anisotropyStrength = 0;
+  const physicalMeshes = []; // Array to store all MeshPhysicalMaterial meshes
 
   shifter.traverse((child) => {
-    if (child.isMesh) {
-      console.log(child.name)
-      if (
-        child.name === "anisotropyEnds" ||
-        child.name === "anisotropyClamps" ||
-        child.name === "anisotropyScrew"
-      ) {
-        // Create new physical material while preserving existing properties
-        const oldMaterial = child.material;
-        if (child.name === "anisotropyEnds") {
-          anisotropyStrength = .12
-        } else if (child.name === "anisotropyClamps") {
-          anisotropyStrength = .12
-        } else {
-          anisotropyStrength = .08
-        }
-        console.log(anisotropyStrength)
+    // Only process Mesh objects
+    if (!child.isMesh) return;
 
-        const physicalMaterial = new THREE.MeshPhysicalMaterial({
-          // Copy existing material properties
-          map: oldMaterial.map,
-          normalMap: oldMaterial.normalMap,
-          roughnessMap: oldMaterial.roughnessMap,
-          metalnessMap: oldMaterial.metalnessMap,
-          color: oldMaterial.color,
-          metalness: oldMaterial.metalness,
-          roughness: oldMaterial.roughness,
-          // Add anisotropy properties
-          anisotropyMap: textures.anisotropy,
-          anisotropyRotation: 1.94,
-          anisotropy: anisotropyStrength,
-          // anisotropy: child.name === "anisotropyEnds" ? 0.12 : 0.1,
-        });
+    // Skip the mesh named 'standardMaterial'
+    if (child.name === "standardMaterial") {
+      meshReferences[child.name] = child;
+      return;
+    }
 
-        // Dispose of old material to free memory
-        oldMaterial.dispose();
-        child.material = physicalMaterial;
+    // Identify meshes that should have physical material + anisotropy
+    if (
+      child.name === "anisotropyEnds" ||
+      child.name === "anisotropyClamps" ||
+      child.name === "anisotropyScrew" ||
+      child.name === "physicalMaterial"
+    ) {
+      const oldMaterial = child.material;
 
-        // Store reference
-        meshReferences[child.name] = child;
-      } else {
-        meshReferences[child.name] = child;
-      }
+      // Assign a custom anisotropy value based on mesh name
+      let anisotropyStrength = 0;
+      if (child.name === "anisotropyEnds") anisotropyStrength = 0.08;
+      if (child.name === "anisotropyClamps") anisotropyStrength = 0.12;
+      if (child.name === "anisotropyScrew") anisotropyStrength = 0.08;
+      // If the mesh is 'physicalMaterial', set anisotropy to 0
+      if (child.name === "physicalMaterial") anisotropyStrength = 0;
+
+      // Create a new MeshPhysicalMaterial, copying over old properties
+      const physicalMaterial = new THREE.MeshPhysicalMaterial({
+        map: oldMaterial.map,
+        normalMap: oldMaterial.normalMap,
+        roughnessMap: oldMaterial.roughnessMap,
+        metalnessMap: oldMaterial.metalnessMap,
+        color: oldMaterial.color,
+        metalness: oldMaterial.metalness,
+        roughness: oldMaterial.roughness,
+
+        // Anisotropy
+        anisotropyMap: textures.anisotropy,
+        anisotropyRotation: 1.94,
+        anisotropy: anisotropyStrength,
+
+        // Clearcoat
+        clearcoat: 0.5,            // default clearcoat
+        clearcoatRoughness: 0.00,  // default clearcoat roughness
+      });
+
+      // Dispose of the old material and apply new
+      oldMaterial.dispose();
+      child.material = physicalMaterial;
+
+      // Store a reference to the mesh for GUI tweaks
+      meshReferences[child.name] = child;
+      physicalMeshes.push(child); // Add to physicalMeshes array
+    } else {
+      // For any other mesh not explicitly handled above
+      meshReferences[child.name] = child;
     }
   });
+
   shifter.position.set(0, 0, 0);
   scene.add(shifter);
 
+  // ----- lil-gui controls -----
+
+  // Shared Clearcoat Parameters
+  const clearcoatParams = {
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.25,
+  };
+
+  // Clearcoat Slider
+  materialTweaks
+    .add(clearcoatParams, "clearcoat")
+    .min(0)
+    .max(1)
+    .step(0.01)
+    .name("All Clearcoat")
+    .onChange((value) => {
+      physicalMeshes.forEach((mesh) => {
+        mesh.material.clearcoat = value;
+      });
+    });
+
+  // Clearcoat Roughness Slider
+  materialTweaks
+    .add(clearcoatParams, "clearcoatRoughness")
+    .min(0)
+    .max(1)
+    .step(0.01)
+    .name("All Clearcoat Roughness")
+    .onChange((value) => {
+      physicalMeshes.forEach((mesh) => {
+        mesh.material.clearcoatRoughness = value;
+      });
+    });
+
+  // Anisotropy intensity for each 'anisotropy' mesh
   materialTweaks
     .add(meshReferences.anisotropyEnds.material, "anisotropy")
     .min(0)
     .max(1)
     .step(0.01)
-    .name("Anisotropy Ends Intensity");
+    .name("Ends Anisotropy");
 
   materialTweaks
     .add(meshReferences.anisotropyClamps.material, "anisotropy")
     .min(0)
     .max(1)
     .step(0.01)
-    .name("Anisotropy Clamps Intensity");
+    .name("Clamps Anisotropy");
 
   materialTweaks
     .add(meshReferences.anisotropyScrew.material, "anisotropy")
     .min(0)
     .max(1)
     .step(0.01)
-    .name("Anisotropy Screw Intensity");
+    .name("Screw Anisotropy");
 
+  // Physical Material Anisotropy (if needed)
   materialTweaks
-    .add(meshReferences.anisotropyEnds.material, "anisotropyRotation")
+    .add(meshReferences.physicalMaterial.material, "anisotropy")
     .min(0)
-    .max(Math.PI * 2)
+    .max(1)
     .step(0.01)
-    .onChange((value) => {
-      meshReferences.anisotropyClamps.material.anisotropyRotation = value;
-    })
-    .name("Anisotropy Rotation");
+    .name("Physical Anisotropy");
 
+  // Shared Roughness Update (if still needed)
   const updateRoughness = (value) => {
-    meshReferences.anisotropyEnds.material.roughness = value;
-    meshReferences.anisotropyClamps.material.roughness = value;
-    meshReferences.base.material.roughness = value;
+    physicalMeshes.forEach((mesh) => {
+      mesh.material.roughness = value;
+    });
   };
 
   materialTweaks
@@ -288,7 +338,7 @@ async function updateEnvironment(environmentId) {
 }
 
 // Set up Debug UI
-const environmentState = { environment: "neutral", showBackground: false };
+const environmentState = { environment: "photoStudio", showBackground: false };
 
 const envController = lightTweaks
   .add(
@@ -342,7 +392,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   100,
 );
-camera.position.set(2, 4, 3.5);
+camera.position.set(1.5, 2.75, 3.5);
 scene.add(camera);
 
 // Controls
